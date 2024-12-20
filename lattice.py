@@ -34,44 +34,65 @@ def plot_lattice_points(points, v1, v2, v3, v4):
 
 def gen_secret_key():
 	return [
-		[0.1, 2],
-		[0.5, 1]
+		[3, 1.5],
+		[1, 2]
 	]
 
 def gen_public_key(sk, factor):
-	v1, v2 = sk
-
 	noise_factor = random.uniform(0.9, 1.1)
-
 	return [
-		[v1[0] * factor, v1[1] * factor],
-		[v2[0] * factor + v2[0] * noise_factor, v1[1] * factor + v2[1] * noise_factor],
+		[sk[0][0] * factor, sk[0][1] * factor],
+		[sk[0][0] * factor + sk[1][0], sk[0][1] * factor + sk[1][1]]
 	]
 
-def encode(pk, message):
-    v1, v2 = pk
-    encoded_message = [
-		[v1[0] * message[0] + v1[1] * message[0] + random.uniform(-0.1, 0.1)],
-		[v2[0] * message[1] + v2[1] * message[1] + random.uniform(-0.1, 0.1)],
-    ]
-    return encoded_message
+def encode(pk, msg):
+	noise = [random.uniform(-0.1, 0.1), random.uniform(-0.1, 0.1)]
+	return [
+		pk[0][0] * msg[0] + pk[0][1] * msg[1] + noise[0],
+		pk[1][0] * msg[0] + pk[1][1] * msg[1] + noise[1]
+	]
+
+def closest_lattice_point(secret_key, point):
+	sk = np.array(secret_key, dtype=float)
+	pt = np.array(point, dtype=float)
+	sk_inv = np.linalg.inv(sk)
+	coords = sk_inv @ pt
+	nearest_coords = np.round(coords)
+	closest_point = sk @ nearest_coords
+	return closest_point.tolist()
 
 def decode(sk, pk, enc):
-   pass
+	enc = closest_lattice_point(sk, enc)
+	det = pk[0][0] * pk[1][1] - pk[0][1] * pk[1][0]
+	if det == 0:
+		raise ValueError("Determinant is zero, cannot invert the matrix")
+	inv_pk = [
+		[pk[1][1] / det, -pk[0][1] / det],
+		[-pk[1][0] / det, pk[0][0] / det]
+	]
+	a, b = [
+		inv_pk[0][0] * enc[0] + inv_pk[0][1] * enc[1],
+		inv_pk[1][0] * enc[0] + inv_pk[1][1] * enc[1]
+	]
+	return [round(a), round(b)]
+
+def fhe_add(a, b):
+	return [a[0] + b[0], a[1] + b[1]]
+
+def fhe_mult(a, b):
+	return [a[0] * b[0], a[1] * b[1]]
 
 if __name__ == "__main__":
 	sk = gen_secret_key()
-	pk = gen_public_key(sk, 2)
+	pk = gen_public_key(sk, 4)
 	print("sk=", sk)
 	print("pk=", pk)
-
-	msg = [1, 2]
+	msg = [2, 3]
 	print("msg=", msg)
-
-	enc = encode(pk, [1, 2])
+	enc = encode(pk, msg)
+	enc = fhe_add(enc, enc)
 	print("enc=", enc)
-
-
+	dec = decode(sk, pk, enc)
+	print("dec=", dec)
 	lattice_points = generate_grid_of_lattice_points(sk[0], sk[1])
-
 	plot_lattice_points(lattice_points, sk[0], sk[1], pk[0], pk[1])
